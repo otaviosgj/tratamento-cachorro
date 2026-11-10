@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#f59e0b">
+<title>🐾 Tratamento do Cachorro</title>
+<style>
+  :root{
+    --bg:#f6f5f0; --card:#ffffff; --ink:#3d3229; --muted:#8a7d6d;
+    --accent:#e8912d; --accent-soft:#fdf1e0; --green:#3faf6e; --green-soft:#e8f7ee;
+    --red:#e05252; --red-soft:#fdecec; --line:#ece7dd; --shadow:0 2px 10px rgba(80,60,30,.08);
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  body{margin:0; background:var(--bg); color:var(--ink); font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;}
+  .wrap{max-width:540px; margin:0 auto; padding:16px 14px 60px;}
+  header{text-align:center; padding:10px 0 4px;}
+  header h1{font-size:1.35rem; margin:0;}
+  header .date{color:var(--muted); font-size:.9rem; margin-top:4px;}
+  header .carinho{display:inline-block; margin-top:8px; background:var(--accent-soft); color:#a4651a;
+    font-size:.8rem; padding:4px 12px; border-radius:999px;}
+  section{margin-top:18px;}
+  h2{font-size:.95rem; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); margin:0 0 10px;}
+  .card{background:var(--card); border-radius:16px; box-shadow:var(--shadow); padding:14px; margin-bottom:10px;}
+  .next-card{text-align:center; background:linear-gradient(135deg,#e8912d,#f3b13f); color:#fff;}
+  .next-card .label{font-size:.8rem; opacity:.9; text-transform:uppercase; letter-spacing:.05em;}
+  .next-card .when{font-size:1.6rem; font-weight:700; margin:4px 0;}
+  .next-card .what{font-size:.95rem; opacity:.95;}
+  .countdown{font-variant-numeric:tabular-nums; font-size:1rem; margin-top:6px; font-weight:600;}
+
+  .dose{display:flex; align-items:center; gap:12px; padding:12px 8px; border-bottom:1px solid var(--line); cursor:pointer;}
+  .dose:last-child{border-bottom:none;}
+  .dose .emoji{font-size:1.6rem; width:36px; text-align:center; flex:none;}
+  .dose .info{flex:1; min-width:0;}
+  .dose .name{font-weight:600;}
+  .dose .desc{font-size:.8rem; color:var(--muted); margin-top:2px;}
+  .dose .time{font-size:.8rem; color:#fff; background:var(--accent); padding:3px 10px; border-radius:999px; flex:none;}
+  .check{width:30px; height:30px; border-radius:50%; border:2.5px solid #d8cfc0; flex:none;
+    display:flex; align-items:center; justify-content:center; color:#fff; font-weight:900; transition:.15s; font-size:.9rem;}
+  .dose.done .check{background:var(--green); border-color:var(--green);}
+  .dose.done .name{text-decoration:line-through; color:var(--muted);}
+  .dose.done .time{background:var(--green);}
+  .dose.late .time{background:var(--red);}
+  .dose.locked{cursor:default;}
+  .dose.locked .check{border-color:#e2d9c8; background:#f4efe6; color:#a99a84;}
+  .dose.locked.missed .check{border-color:#f3bcbc; background:var(--red-soft);}
+  .tag-late{font-size:.7rem; background:var(--red-soft); color:var(--red); padding:2px 8px; border-radius:999px; font-weight:700;}
+  .tag-lock{font-size:.7rem; background:#f4efe6; color:var(--muted); padding:2px 8px; border-radius:999px; font-weight:700;}
+
+  .bath-card{display:flex; gap:12px; align-items:center;}
+  .bath-card .emoji{font-size:2rem;}
+  .timer-btn{border:none; background:var(--accent); color:#fff; padding:10px 16px; border-radius:12px;
+    font-weight:700; font-size:.9rem; cursor:pointer; flex:none;}
+  .timer-btn.running{background:var(--green);}
+  .timer-display{font-variant-numeric:tabular-nums; font-weight:800; font-size:1.3rem; margin-top:6px;}
+  .notif-ask{display:flex; gap:12px; align-items:center; font-size:.85rem;}
+  .notif-ok{font-size:.85rem; color:var(--muted);}
+
+  /* calendário */
+  .cal{background:var(--card); border-radius:16px; box-shadow:var(--shadow); padding:14px;}
+  .cal-head{display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;}
+  .cal-head .month{font-weight:800; text-transform:capitalize;}
+  .cal-nav{border:1px solid var(--line); background:#faf8f3; width:34px; height:34px; border-radius:10px;
+    font-size:1.1rem; cursor:pointer; color:var(--ink);}
+  .cal-grid{display:grid; grid-template-columns:repeat(7,1fr); gap:5px;}
+  .dow-h{text-align:center; font-size:.62rem; color:var(--muted); font-weight:700; text-transform:uppercase; padding-bottom:2px;}
+  .day{border-radius:10px; border:1.5px solid transparent; padding:3px 1px; text-align:center; cursor:pointer;
+    min-height:46px; display:flex; flex-direction:column; justify-content:center;}
+  .day .num{font-weight:700; font-size:.85rem;}
+  .day .ics{font-size:.6rem; line-height:1.2; letter-spacing:-1px; margin-top:2px;}
+  .day.empty{visibility:hidden;}
+  .day.neutral{color:#c9c0b2;}
+  .day.full{background:var(--green-soft); border-color:#a9ddc0; color:#1c7c46;}
+  .day.partial{background:#fdf3df; border-color:#f0d49c; color:#a4651a;}
+  .day.missed{background:var(--red-soft); border-color:#f3bcbc; color:var(--red);}
+  .day.missed.past{color:#b4635e;}
+  .day.future{opacity:.5;}
+  .day.today-cell{outline:2.5px solid var(--accent);}
+  .cal-legend{display:flex; gap:12px; flex-wrap:wrap; margin-top:12px; font-size:.7rem; color:var(--muted);}
+  .cal-legend span{display:flex; align-items:center; gap:4px;}
+  .dot{width:10px; height:10px; border-radius:3px; display:inline-block;}
+  .dot.f{background:#a9ddc0;} .dot.p{background:#f0d49c;} .dot.m{background:#f3bcbc;} .dot.b{background:#efe9dc;}
+  .cal-hint{text-align:center; font-size:.72rem; color:var(--muted); margin-top:8px;}
+
+  /* modal do dia */
+  .modal-overlay{position:fixed; inset:0; background:rgba(60,45,25,.45); display:none;
+    z-index:50; align-items:flex-end; justify-content:center;}
+  .modal-overlay.open{display:flex;}
+  .modal{background:var(--bg); border-radius:20px 20px 0 0; max-width:540px; width:100%;
+    max-height:78vh; overflow:auto; padding:16px 16px 30px; box-shadow:0 -6px 30px rgba(0,0,0,.2);}
+  .modal-head{display:flex; justify-content:space-between; align-items:flex-start; gap:8px; margin-bottom:10px;}
+  .modal-head h3{margin:0; font-size:1.05rem; text-transform:capitalize;}
+  .modal-head .sub{font-size:.78rem; color:var(--muted); margin-top:4px; text-transform:none; font-weight:400;}
+  .modal-close{border:none; background:#ece7dd; width:32px; height:32px; border-radius:50%;
+    font-size:1rem; cursor:pointer; flex:none; font-weight:700; color:var(--ink);}
+  .modal-banner{background:#f4efe6; color:var(--muted); font-size:.75rem; padding:8px 12px;
+    border-radius:10px; margin-bottom:10px; display:flex; gap:6px; align-items:center;}
+
+  .progress-row{margin-bottom:14px;}
+  .progress-row:last-child{margin-bottom:0;}
+  .progress-head{display:flex; justify-content:space-between; align-items:baseline; gap:8px;}
+  .progress-head .t-name{font-weight:700;}
+  .progress-head .badge{flex:none; font-size:.65rem; font-weight:800; padding:2px 8px; border-radius:999px; background:var(--accent-soft); color:#a4651a;}
+  .progress-head .badge.today{background:var(--red-soft); color:var(--red);}
+  .bar{height:10px; background:#f0ebe1; border-radius:99px; margin:6px 0 4px; overflow:hidden;}
+  .bar > div{height:100%; background:var(--green); border-radius:99px; transition:width .3s;}
+  .progress-meta{display:flex; justify-content:space-between; font-size:.75rem; color:var(--muted);}
+
+  footer{text-align:center; margin-top:28px; color:var(--muted); font-size:.75rem;}
+  footer button{border:none; background:none; color:var(--muted); text-decoration:underline; cursor:pointer; font-size:.75rem;}
+  h3.slot{font-size:.85rem; color:var(--muted); margin:14px 0 8px; font-weight:700;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>🐾 Tratamento do bebê</h1>
+    <div class="date" id="todayLabel"></div>
+    <div class="carinho">cassorro bunito de mãe 💛</div>
+  </header>
+
+  <div id="notifSlot" style="margin-top:14px"></div>
+  <section id="nextSection"></section>
+  <section>
+    <h2>Hoje</h2>
+    <div id="todayBath"></div>
+    <h3 class="slot" id="morningTitle">☀️ Manhã</h3>
+    <div class="card" id="morningList"></div>
+    <h3 class="slot" id="eveningTitle">🌙 Noite</h3>
+    <div class="card" id="eveningList"></div>
+  </section>
+  <section>
+    <h2>Calendário do tratamento</h2>
+    <div class="cal">
+      <div class="cal-head">
+        <button class="cal-nav" id="prevMonth">‹</button>
+        <div class="month" id="calMonth"></div>
+        <button class="cal-nav" id="nextMonth">›</button>
+      </div>
+      <div class="cal-grid" id="calGrid"></div>
+      <div class="cal-legend">
+        <span><i class="dot f"></i> dia completo</span>
+        <span><i class="dot p"></i> pela metade</span>
+        <span><i class="dot m"></i> não feito</span>
+        <span><i class="dot b"></i> sem cuidado</span>
+      </div>
+      <div class="cal-hint">👆 toque em um dia para ver as doses dele — cada uma é marcada separadamente</div>
+    </div>
+  </section>
+  <section>
+    <h2>Progresso do tratamento</h2>
+    <div class="card" id="progressList"></div>
+  </section>
+
+  <footer>
+    Dados salvos neste navegador 💾<br>
+    <button id="resetBtn">zerar todas as marcações</button>
+  </footer>
+</div>
+
+<!-- modal de detalhe do dia -->
+<div class="modal-overlay" id="dayModal">
+  <div class="modal">
+    <div class="modal-head">
+      <div>
+        <h3 id="modalTitle"></h3>
+        <div class="sub" id="modalSub"></div>
+      </div>
+      <button class="modal-close" id="modalClose">✕</button>
+    </div>
+    <div id="modalBanner"></div>
+    <div class="card" id="modalList"></div>
+  </div>
+</div>
+
+<script>
+// ============ DADOS DO TRATAMENTO ============
+const TREATMENTS = [
+  {
+    id:'otosyn', icon:'👂', name:'Otosyn', usage:'Uso otológico',
+    desc:'4 gotas em cada ouvido',
+    start:'2026-10-28T21:00', everyHours:12, durationDays:14
+  },
+  {
+    id:'lenco', icon:'🧻', name:'Lenço Clorexidine 3% + D-Pantenol 1%', usage:'Uso tópico',
+    desc:'Passar o lenço no corpo (60 unid.)',
+    start:'2026-10-30T21:00', everyHours:12, durationDays:28
+  },
+  {
+    id:'same', icon:'💊', name:'SAME 54 mg', usage:'Uso interno',
+    desc:'Dar 1 cápsula',
+    start:'2026-10-31T21:00', everyHours:24, durationDays:30
+  },
+  {
+    id:'xampu', icon:'🛁', name:'Ketochlor Xampu', usage:'Uso tópico',
+    desc:'Banho — deixar agir 10 minutos no corpo',
+    type:'bath', start:'2026-11-04', everyDays:3, durationDays:42
+  }
+];
+
+const STORE_KEY = 'tratamento-cachorro-v1';
+const PREMARK_KEY = 'tratamento-premarked-v2';
+const NOTIF_SENT_KEY = 'tratamento-notif-sent';
+let done = {};
+try { done = JSON.parse(localStorage.getItem(STORE_KEY) || '{}'); } catch(e){ done = {}; }
+function save(){ localStorage.setItem(STORE_KEY, JSON.stringify(done)); }
+
+// ============ MARCAÇÃO AUTOMÁTICA DOS DIAS ANTERIORES A HOJE ============
+function startOfDay(d){ return new Date(d.getFullYear(), d.getMonth(), d.getDate()); }
+function premarkPastDays(){
+  if(localStorage.getItem(PREMARK_KEY)) return;
+  const today0 = startOfDay(new Date());
+  for(const t of TREATMENTS){
+    for(const d of allDates(t)){
+      if(d < today0) done[doseKey(t,d)] = true;   // tudo antes de hoje = já feito
+    }
+  }
+  localStorage.setItem(PREMARK_KEY, '1');
+  save();
+}
+
+// ============ HELPERS ============
+function parseStart(t){
+  if(t.type === 'bath'){
+    const [y,m,d] = t.start.split('-').map(Number);
+    return new Date(y, m-1, d);
+  }
+  return new Date(t.start);
+}
+function addDays(base, n){ const d = new Date(base); d.setDate(d.getDate()+n); return d; }
+function sameDay(a,b){ return a.getFullYear()===b.getFullYear() && a.getMonth()===b.getMonth() && a.getDate()===b.getDate(); }
+function fmtTime(d){ return d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}); }
+function fmtDate(d){ return d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'}); }
+function doseKey(t, d){
+  const p = n => String(n).padStart(2,'0');
+  return `${t.id}@${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+function findDoseByKey(key){
+  const idx = key.indexOf('@');
+  const t = TREATMENTS.find(x => x.id === key.slice(0, idx));
+  if(!t) return null;
+  const d = new Date(key.slice(idx+1));
+  if(isNaN(d)) return null;
+  return {t, d, key};
+}
+// Editável enquanto o DIA da dose ainda não terminou (tranca à meia-noite)
+function canEditDose(d){
+  return startOfDay(d) >= startOfDay(new Date());
+}
+
+// Gera todas as datas (doses / banhos) de um tratamento
+function allDates(t){
+  const start = parseStart(t);
+  const out = [];
+  if(t.type === 'bath'){
+    const limit = addDays(start, t.durationDays - 1);
+    for(let k = 0; ; k++){
+      const d = addDays(start, k * t.everyDays);
+      if(d > limit) break;
+      out.push(d);
+    }
+  } else {
+    const total = Math.floor(t.durationDays * 24 / t.everyHours);
+    for(let k = 0; k < total; k++){
+      out.push(new Date(start.getTime() + k * t.everyHours * 3600000));
+    }
+  }
+  return out;
+}
+function endDate(t){
+  const dates = allDates(t);
+  return dates[dates.length - 1];
+}
+function dosesOnDay(day){
+  const out = [];
+  for(const t of TREATMENTS){
+    for(const d of allDates(t)){
+      if(sameDay(d, day)) out.push({t, d});
+    }
+  }
+  return out.sort((a,b)=>a.d-b.d);
+}
+
+// ============ NOTIFICAÇÕES DE HORÁRIO ============
+let sentNotif = {};
+try { sentNotif = JSON.parse(localStorage.getItem(NOTIF_SENT_KEY) || '{}'); } catch(e){ sentNotif = {}; }
+function notificationItems(now){
+  const items = [];
+  for(const t of TREATMENTS){
+    if(t.type === 'bath'){
+      // lembrete de banho às 09:00 do dia do banho
+      for(const d of allDates(t)){
+        const at = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 9, 0, 0);
+        if(at < now) continue;
+        items.push({t, at, notifKey: d.toDateString()+'#bath', markKey: doseKey(t,d),
+          title:'🛁 Hora do banho!', body:'Ketochlor Xampu — deixar agir 10 minutos'});
+      }
+    } else {
+      for(const d of allDates(t)){
+        if(d < now) continue;
+        items.push({t, at:d, notifKey: doseKey(t,d), markKey: doseKey(t,d),
+          title:'🐾 Hora do cuidado!', body:`${t.icon} ${t.name} — ${t.desc} (${fmtTime(d)})`});
+      }
+    }
+  }
+  return items.sort((a,b)=>a.at-b.at);
+}
+function checkNotifications(){
+  if(!('Notification' in window) || Notification.permission !== 'granted') return;
+  const now = Date.now();
+  for(const item of notificationItems(new Date(now))){
+    const dt = item.at.getTime();
+    // dispara quando chega no horário (janela de 1 min) e ainda não foi feito
+    if(dt <= now && now - dt <= 60000 && !sentNotif[item.notifKey] && !done[item.markKey]){
+      sentNotif[item.notifKey] = true;
+      try{ localStorage.setItem(NOTIF_SENT_KEY, JSON.stringify(sentNotif)); }catch(e){}
+      const n = new Notification(item.title, {body: item.body, tag: item.notifKey});
+      n.onclick = () => { window.focus(); n.close(); };
+    }
+  }
+}
+setInterval(checkNotifications, 20000);
+
+// ============ TIMER DO XAMPU (10 minutos) ============
+let timerInt = null;
+function startBathTimer(){
+  if(timerInt) { clearInterval(timerInt); timerInt = null; }
+  const el = document.getElementById('bathTimer');
+  if(!el) return;
+  let left = 10*60;
+  const btn = document.getElementById('timerBtn');
+  btn.textContent = 'Deixar agir…';
+  btn.classList.add('running');
+  const tick = () => {
+    const m = String(Math.floor(left/60)).padStart(2,'0'), s = String(left%60).padStart(2,'0');
+    el.textContent = `⏳ ${m}:${s}`;
+    if(left <= 0){
+      clearInterval(timerInt); timerInt = null;
+      el.textContent = '✅ Pode enxaguar!';
+      btn.textContent = 'Começar de novo';
+      btn.classList.remove('running');
+      return;
+    }
+    left--;
+  };
+  tick();
+  timerInt = setInterval(tick, 1000);
+}
+
+// ============ CALENDÁRIO ============
+let viewYear = null, viewMonth = null;
+function changeMonth(delta){
+  viewMonth += delta;
+  if(viewMonth < 0){ viewMonth = 11; viewYear--; }
+  if(viewMonth > 11){ viewMonth = 0; viewYear++; }
+  renderCalendar();
+}
+function renderCalendar(){
+  const now = new Date();
+  if(viewYear === null){ viewYear = now.getFullYear(); viewMonth = now.getMonth(); }
+  document.getElementById('calMonth').textContent =
+    new Date(viewYear, viewMonth, 1).toLocaleDateString('pt-BR',{month:'long', year:'numeric'});
+
+  const today0 = startOfDay(now);
+  const first = new Date(viewYear, viewMonth, 1);
+  const daysInMonth = new Date(viewYear, viewMonth+1, 0).getDate();
+  const grid = document.getElementById('calGrid');
+  const dows = ['dom','seg','ter','qua','qui','sex','sáb'];
+  let html = dows.map(d=>`<div class="dow-h">${d}</div>`).join('');
+  for(let i=0; i<first.getDay(); i++) html += `<div class="day empty"></div>`;
+  for(let day=1; day<=daysInMonth; day++){
+    const date = new Date(viewYear, viewMonth, day);
+    const isFuture = date > today0;
+    const isPast = date < today0;
+    const sched = dosesOnDay(date);
+    let cls = 'neutral', icons = '';
+    if(sched.length){
+      const doneCount = sched.filter(x => done[doseKey(x.t, x.d)]).length;
+      if(isFuture){ cls = 'future full'; }
+      else if(doneCount === sched.length){ cls = 'full'; }
+      else if(doneCount === 0){ cls = 'missed' + (isPast ? ' past' : ''); }
+      else { cls = 'partial'; }
+      icons = sched.length <= 3 ? sched.map(x=>x.t.icon).join('') : sched.slice(0,2).map(x=>x.t.icon).join('') + `+${sched.length-2}`;
+    }
+    if(sameDay(date, now)) cls += ' today-cell';
+    html += `<div class="day ${cls}" data-day="${date.getTime()}">
+      <div class="num">${day}</div>${icons ? `<div class="ics">${icons}</div>` : ''}</div>`;
+  }
+  grid.innerHTML = html;
+}
+// tocar em um dia abre a lista dele (sem marcar nada automaticamente)
+document.getElementById('calGrid').addEventListener('click', ev => {
+  const cell = ev.target.closest('.day:not(.empty)');
+  if(!cell || !cell.dataset.day) return;
+  const sched = dosesOnDay(new Date(Number(cell.dataset.day)));
+  if(sched.length) openDayModal(Number(cell.dataset.day));
+});
+
+// ============ MODAL DO DIA ============
+function doseRow(item){
+  const key = doseKey(item.t, item.d);
+  const isDone = !!done[key];
+  const editable = canEditDose(item.d);
+  const now = new Date();
+  const isLate = !isDone && editable && item.d < now;
+  const classes = ['dose'];
+  if(isDone) classes.push('done');
+  if(isLate) classes.push('late');
+  if(!editable) classes.push('locked');
+  if(!editable && !isDone) classes.push('missed');
+  let rightChip;
+  if(item.t.type === 'bath'){ rightChip = `<span class="time" style="${isDone?'background:var(--green)':''}">no dia</span>`; }
+  else { rightChip = `<span class="time">${fmtTime(item.d)}</span>`; }
+  const icon = isDone ? '✓' : (editable ? '' : '🔒');
+  const lockTag = !editable && !isDone ? '<span class="tag-lock">🔒 não pode mais alterar</span>' : '';
+  const doneTag = !editable && isDone ? '<span class="tag-lock">✓ feito</span>' : '';
+  return `
+    <div class="${classes.join(' ')}" data-key="${key}">
+      <div class="emoji">${item.t.icon}</div>
+      <div class="info">
+        <div class="name">${item.t.name} ${lockTag} ${doneTag}</div>
+        <div class="desc">${item.t.desc}</div>
+      </div>
+      ${rightChip}
+      <div class="check">${icon}</div>
+    </div>`;
+}
+function openDayModal(ts){
+  const day = new Date(ts);
+  window.__openDayTs = ts; // lembra qual dia está aberto, para atualizar após marcar
+  const now = new Date();
+  const sched = dosesOnDay(day);
+  const isPast = startOfDay(day) < startOfDay(now);
+  const isToday = sameDay(day, now);
+  document.getElementById('modalTitle').textContent =
+    day.toLocaleDateString('pt-BR',{weekday:'long', day:'numeric', month:'long'});
+  const doneCount = sched.filter(x => done[doseKey(x.t, x.d)]).length;
+  document.getElementById('modalSub').textContent =
+    `${doneCount} de ${sched.length} feitos nesse dia${isToday ? ' (hoje)' : ''}`;
+  document.getElementById('modalBanner').innerHTML = isPast
+    ? '🔒 <span>Dia passado — apenas visualização, não é mais possível alterar.</span>'
+    : (isToday ? '👆 toque em cada dose para marcar ou desmarcar — nada é marcado automaticamente.' : '👆 toque para marcar as doses desse dia.');
+  document.getElementById('modalList').innerHTML = sched.map(doseRow).join('');
+  document.getElementById('dayModal').classList.add('open');
+}
+function closeDayModal(){ document.getElementById('dayModal').classList.remove('open'); }
+document.getElementById('modalClose').addEventListener('click', closeDayModal);
+document.getElementById('dayModal').addEventListener('click', ev => {
+  if(ev.target.id === 'dayModal') closeDayModal();
+});
+document.addEventListener('keydown', ev => { if(ev.key === 'Escape') closeDayModal(); });
+
+// ============ RENDER PRINCIPAL ============
+function render(){
+  const now = new Date();
+  const today0 = startOfDay(now);
+  document.getElementById('todayLabel').textContent =
+    now.toLocaleDateString('pt-BR',{weekday:'long', day:'numeric', month:'long'});
+
+  // ---- lembretes ----
+  const slot = document.getElementById('notifSlot');
+  if('Notification' in window){
+    if(Notification.permission === 'granted'){
+      slot.innerHTML = `<div class="card notif-ok">🔔 Lembretes ativos — você será avisada no horário de cada dose (com o app aberto).</div>`;
+    } else if(Notification.permission === 'default'){
+      slot.innerHTML = `<div class="card notif-ask">
+        <span style="flex:1">🔔 Quer ser avisada nos horários das doses?</span>
+        <button class="timer-btn" id="notifBtn">Ativar</button></div>`;
+    } else {
+      slot.innerHTML = `<div class="card notif-ok">🔕 Lembretes desativados (permissão bloqueada no navegador).</div>`;
+    }
+  }
+
+  // ---- próxima dose ----
+  const nextSection = document.getElementById('nextSection');
+  let next = null, nextT = null, isBathNext = false;
+  for(const t of TREATMENTS){
+    for(const d of allDates(t)){
+      if(d > now && (!next || d < next)){ next = d; nextT = t; isBathNext = (t.type==='bath'); }
+    }
+  }
+  const everythingDone = !next && TREATMENTS.every(t => endDate(t) < now);
+  if(everythingDone){
+    nextSection.innerHTML = `<div class="card next-card"><div class="what">🎉 Tratamento concluído! Parabéns, mães corujas!</div></div>`;
+  } else if(next){
+    const mins = Math.floor((next - now)/60000);
+    const h = Math.floor(mins/60), m = mins % 60;
+    const isToday = sameDay(next, now);
+    nextSection.innerHTML = `
+      <div class="card next-card">
+        <div class="label">Próximo cuidado</div>
+        <div class="when">${isToday ? fmtTime(next) : `🗓️ ${fmtDate(next)}`}</div>
+        <div class="what">${nextT.icon} ${nextT.name}${isBathNext ? ' (banho)' : ''}</div>
+        <div class="countdown">⏰ em ${h>0 ? h+'h ' : ''}${m}min</div>
+      </div>`;
+  }
+
+  // ---- banho de hoje ----
+  const bathToday = TREATMENTS.find(t => t.type==='bath' && allDates(t).some(d => sameDay(d, today0)));
+  const bathEl = document.getElementById('todayBath');
+  if(bathToday){
+    const bathDates = allDates(bathToday);
+    const nBath = bathDates.findIndex(d => sameDay(d, today0)) + 1;
+    bathEl.innerHTML = `
+      <div class="card bath-card">
+        <div class="emoji">🛁</div>
+        <div style="flex:1">
+          <div style="font-weight:700">Banho com Ketochlor hoje!</div>
+          <div style="font-size:.8rem;color:var(--muted)">Banho ${nBath} de ${bathDates.length} · deixar agir 10 min</div>
+          <div class="timer-display" id="bathTimer"></div>
+        </div>
+        <button class="timer-btn" id="timerBtn" onclick="startBathTimer()">Iniciar 10:00</button>
+      </div>`;
+  } else {
+    const xam = TREATMENTS.find(t => t.id==='xampu');
+    const nextBath = allDates(xam).find(d => d >= today0);
+    if(nextBath && endDate(xam) >= today0){
+      const days = Math.round((nextBath - today0)/86400000);
+      bathEl.innerHTML = `<div class="card" style="font-size:.85rem;color:var(--muted)">🛁 Sem banho hoje — próximo em ${days===1?'amanhã':days+' dias'} (${fmtDate(nextBath)})</div>`;
+    }
+  }
+
+  // ---- doses de hoje (manhã / noite) ----
+  const slots = {morning:[], evening:[]};
+  for(const t of TREATMENTS){
+    if(t.type === 'bath') continue;
+    for(const d of allDates(t)){
+      if(!sameDay(d, today0)) continue;
+      const slotKey = d.getHours() <= 12 ? 'morning' : 'evening';
+      slots[slotKey].push({t, d});
+    }
+  }
+  function doseRowToday(item){
+    const key = doseKey(item.t, item.d);
+    const isDone = !!done[key];
+    const isLate = !isDone && item.d < now;
+    const lastDay = sameDay(endDate(item.t), today0);
+    return `
+      <div class="dose ${isDone?'done':''} ${isLate?'late':''}" data-key="${key}">
+        <div class="emoji">${item.t.icon}</div>
+        <div class="info">
+          <div class="name">${item.t.name} ${lastDay?'<span class="tag-late">última dose hoje!</span>':''}</div>
+          <div class="desc">${item.t.desc}</div>
+        </div>
+        <div class="time">${fmtTime(item.d)}</div>
+        <div class="check">✓</div>
+      </div>`;
+  }
+  const mEl = document.getElementById('morningList'), eEl = document.getElementById('eveningList');
+  const renderSlot = (listEl, titleId, items) => {
+    if(items.length){
+      document.getElementById(titleId).style.display = '';
+      listEl.style.display = '';
+      listEl.innerHTML = items.sort((a,b)=>a.d-b.d).map(doseRowToday).join('');
+    } else {
+      document.getElementById(titleId).style.display = 'none';
+      listEl.style.display = 'none';
+    }
+  };
+  renderSlot(mEl, 'morningTitle', slots.morning);
+  renderSlot(eEl, 'eveningTitle', slots.evening);
+
+  // ---- calendário ----
+  renderCalendar();
+
+  // ---- progresso ----
+  const pEl = document.getElementById('progressList');
+  let pHtml = '';
+  for(const t of TREATMENTS){
+    const dates = allDates(t);
+    const doneCount = dates.filter(d => done[doseKey(t,d)]).length;
+    const total = dates.length;
+    const pct = total ? Math.round(doneCount/total*100) : 0;
+    const end = endDate(t);
+    const remaining = dates.filter(d => d >= today0 && !done[doseKey(t,d)]).length;
+    const isLast = sameDay(end, today0);
+    const unit = t.type==='bath' ? 'banho' : 'dose';
+    pHtml += `
+      <div class="progress-row">
+        <div class="progress-head">
+          <span class="t-name">${t.icon} ${t.name}</span>
+          ${isLast ? '<span class="badge today">ÚLTIMO DIA!</span>' : ''}
+        </div>
+        <div class="bar"><div style="width:${pct}%"></div></div>
+        <div class="progress-meta">
+          <span>${doneCount}/${total} ${unit}${total>1?'s':''} no total · ${remaining===0?'completo ✅':`faltam ${remaining} a partir de hoje`}</span>
+          <span>${fmtDate(parseStart(t))} → ${fmtDate(end)}</span>
+        </div>
+      </div>`;
+  }
+  pEl.innerHTML = pHtml;
+}
+
+// ---- marcar/desmarcar uma dose individual (checklist de hoje ou modal) ----
+document.addEventListener('click', ev => {
+  const btn = ev.target.closest('#notifBtn');
+  if(btn){
+    if('Notification' in window){
+      Notification.requestPermission().then(() => { checkNotifications(); render(); });
+    }
+    return;
+  }
+  const row = ev.target.closest('.dose');
+  if(!row) return;
+  const info = findDoseByKey(row.dataset.key);
+  if(!info) return;
+  if(!canEditDose(info.d)){
+    alert('🔒 Esse dia já passou — não é mais possível alterar, apenas visualizar.');
+    return;
+  }
+  if(done[info.key]) delete done[info.key]; else done[info.key] = true;
+  save();
+  render();
+  // mantém o modal aberto e atualizado, se estiver visível
+  if(document.getElementById('dayModal').classList.contains('open') && window.__openDayTs){
+    openDayModal(window.__openDayTs);
+  }
+});
+
+document.getElementById('prevMonth').addEventListener('click', () => changeMonth(-1));
+document.getElementById('nextMonth').addEventListener('click', () => changeMonth(1));
+
+document.getElementById('resetBtn').addEventListener('click', () => {
+  if(confirm('Zerar todas as marcações? Os dias anteriores a hoje voltam a ficar marcados automaticamente, pois o tratamento já começou antes.')){
+    done = {};
+    localStorage.removeItem(PREMARK_KEY);
+    premarkPastDays();
+    render();
+  }
+});
+
+// ---- boot ----
+premarkPastDays();
+render();
+checkNotifications();
+</script>
+</body>
+</html>
