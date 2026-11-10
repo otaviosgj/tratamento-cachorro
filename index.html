@@ -361,34 +361,47 @@ function premarkPastDays(){
 }
 
 // ============ CARREGAR / ENVIAR / MESCLAR ============
-async function loadRemote(){
+// Busca o data.json no caminho mais rápido: API do GitHub (sem cache de 5 min) e cai para a raw se falhar
+async function fetchRemoteJson(){
+  try{
+    const res = await fetch('https://api.github.com/repos/' + REPO + '/contents/' + DATA_FILE,
+      { headers: { 'Accept': 'application/vnd.github.raw+json' } });
+    if(res.ok){
+      const txt = await res.text();
+      try{ return JSON.parse(txt); }catch(e){}
+      return { notFound: true };
+    }
+    if(res.status === 404) return { notFound: true };
+  } catch(e){ /* segue para o fallback */ }
   try{
     const res = await fetch(RAW_URL + '?_=' + Date.now(), { cache:'no-store' });
-    if(res.ok){
-      const data = await res.json();
-      if(data && data.v === 1 && data.done){
-        remoteLoaded = true;
-        if(!pendingDirty && !pushBusy){
-          done = Object.assign({}, data.done);
-          persistCache();
-          if(isOwner()){
-            premarkPastDays(); // já renderiza por dentro quando muda algo
-          }
-          render();
-        }
-        return true;
+    if(res.ok) return await res.json();
+    if(res.status === 404) return { notFound: true };
+  } catch(e){}
+  return null;
+}
+async function loadRemote(){
+  const data = await fetchRemoteJson();
+  if(data && data.v === 1 && data.done){
+    remoteLoaded = true;
+    if(!pendingDirty && !pushBusy){
+      done = Object.assign({}, data.done);
+      persistCache();
+      if(isOwner()){
+        premarkPastDays(); // já renderiza por dentro quando muda algo
       }
-    } else if(res.status === 404){
-      // arquivo ainda não publicado — usa o cache local com o preenchimento automático
-      remoteLoaded = false;
-      if(Object.keys(done).length === 0){
-        premarkInto(done);
-        persistCache();
-        render();
-      }
+      render();
     }
-  } catch(e){
-    // offline — mantém o cache local
+    return true;
+  }
+  if(data && data.notFound){
+    // arquivo ainda não publicado — usa o cache local com o preenchimento automático
+    remoteLoaded = false;
+    if(!Object.keys(done).length){
+      premarkInto(done);
+      persistCache();
+      render();
+    }
   }
   return false;
 }
@@ -473,8 +486,11 @@ async function doPush(){
   updateSyncBar('⏳ Sincronizando com o GitHub…');
   for(let tentativa = 1; tentativa <= 3; tentativa++){
     try{
-      let sha = null;
-      try{ sha = await fetchSha(); }catch(e){}
+      // usa o sha em cache (salva direto, sem ir buscar) — só busca novo se conflitar
+      let sha = cachedSha;
+      if(!sha){
+        try{ sha = await fetchSha(); }catch(e){}
+      }
       const payload = {
         message: '🐾 atualização do acompanhamento',
         content: b64(JSON.stringify({ v:1, updated: new Date().toISOString(), done: done }))
@@ -501,7 +517,11 @@ async function doPush(){
         pushBusy = false;
         return;
       }
-      // 409/422 → sha desatualizado, tenta de novo com sha fresco
+      if(res.status === 409 || res.status === 422){
+        cachedSha = null; // o arquivo mudou lá fora — busca um sha fresco e tenta de novo
+        continue;
+      }
+      break; // outro erro: sai — o reenvio automático cobre depois
     } catch(e){
       updateSyncBar('⚠️ Sem conexão — suas marcações estão salvas no aparelho e serão enviadas automaticamente');
       pushBusy = false;
@@ -513,7 +533,7 @@ async function doPush(){
 }
 function schedulePush(){
   clearTimeout(pushTimer);
-  pushTimer = setTimeout(doPush, 800);
+  pushTimer = setTimeout(doPush, 300);
 }
 
 // ============ BARRA DE STATUS ============
@@ -945,7 +965,10 @@ document.getElementById('resetBtn').addEventListener('click', () => {
   }
   updateSyncBar();
   checkNotifications();
-  setInterval(pollRemote, 45000);          // visitantes veem atualizações rodando
+  setInterval(pollRemote, 75000);          // leitores acompanham (via API, sem cache de 5 min)
+  document.addEventListener('visibilitychange', () => {
+    if(document.visibilityState === 'visible') pollRemote(); // ao voltar para o app, atualiza na hora
+  });
   setInterval(() => { if(pendingDirty) doPush(); }, 30000);  // reenvio offline
 })();
 </script>
