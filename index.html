@@ -57,12 +57,8 @@
   .tag-late{font-size:.7rem; background:var(--red-soft); color:var(--red); padding:2px 8px; border-radius:999px; font-weight:700;}
   .tag-lock{font-size:.7rem; background:#f4efe6; color:var(--muted); padding:2px 8px; border-radius:999px; font-weight:700;}
 
-  .bath-card{display:flex; gap:12px; align-items:center;}
-  .bath-card .emoji{font-size:2rem;}
   .timer-btn{border:none; background:var(--accent); color:#fff; padding:10px 16px; border-radius:12px;
-    font-weight:700; font-size:.9rem; cursor:pointer; flex:none;}
-  .timer-btn.running{background:var(--green);}
-  .timer-display{font-variant-numeric:tabular-nums; font-weight:800; font-size:1.3rem; margin-top:6px;}
+    font-weight:700; font-size:.9rem; cursor:pointer;}
   .notif-ask{display:flex; gap:12px; align-items:center; font-size:.85rem;}
   .notif-ok{font-size:.85rem; color:var(--muted);}
 
@@ -144,7 +140,7 @@
   <section id="nextSection"></section>
   <section>
     <h2>Hoje</h2>
-    <div id="todayBath"></div>
+    <div id="nextBathInfo"></div>
     <h3 class="slot" id="morningTitle">☀️ Manhã</h3>
     <div class="card" id="morningList"></div>
     <h3 class="slot" id="eveningTitle">🌙 Noite</h3>
@@ -565,32 +561,6 @@ function checkNotifications(){
 }
 setInterval(checkNotifications, 20000);
 
-// ============ TIMER DO XAMPU (10 minutos) ============
-let timerInt = null;
-function startBathTimer(){
-  if(timerInt) { clearInterval(timerInt); timerInt = null; }
-  const el = document.getElementById('bathTimer');
-  if(!el) return;
-  let left = 10*60;
-  const btn = document.getElementById('timerBtn');
-  btn.textContent = 'Deixar agir…';
-  btn.classList.add('running');
-  const tick = () => {
-    const m = String(Math.floor(left/60)).padStart(2,'0'), s = String(left%60).padStart(2,'0');
-    el.textContent = `⏳ ${m}:${s}`;
-    if(left <= 0){
-      clearInterval(timerInt); timerInt = null;
-      el.textContent = '✅ Pode enxaguar!';
-      btn.textContent = 'Começar de novo';
-      btn.classList.remove('running');
-      return;
-    }
-    left--;
-  };
-  tick();
-  timerInt = setInterval(tick, 1000);
-}
-
 // ============ CALENDÁRIO ============
 let viewYear = null, viewMonth = null;
 function changeMonth(delta){
@@ -747,37 +717,21 @@ function render(){
       </div>`;
   }
 
-  // ---- banho de hoje ----
-  const bathToday = TREATMENTS.find(t => t.type==='bath' && allDates(t).some(d => sameDay(d, today0)));
-  const bathEl = document.getElementById('todayBath');
-  if(bathToday){
-    const bathDates = allDates(bathToday);
-    const nBath = bathDates.findIndex(d => sameDay(d, today0)) + 1;
-    bathEl.innerHTML = `
-      <div class="card bath-card">
-        <div class="emoji">🛁</div>
-        <div style="flex:1">
-          <div style="font-weight:700">Banho com Ketochlor hoje!</div>
-          <div style="font-size:.8rem;color:var(--muted)">Banho ${nBath} de ${bathDates.length} · deixar agir 10 min</div>
-          <div class="timer-display" id="bathTimer"></div>
-        </div>
-        <button class="timer-btn" id="timerBtn" onclick="startBathTimer()">Iniciar 10:00</button>
-      </div>`;
-  } else {
-    const xam = TREATMENTS.find(t => t.id==='xampu');
-    const nextBath = allDates(xam).find(d => d >= today0);
-    if(nextBath && endDate(xam) >= today0){
-      const days = Math.round((nextBath - today0)/86400000);
-      bathEl.innerHTML = `<div class="card" style="font-size:.85rem;color:var(--muted)">🛁 Sem banho hoje — próximo em ${days===1?'amanhã':days+' dias'} (${fmtDate(nextBath)})</div>`;
-    }
+  // ---- banho de hoje (informação) ----
+  const xam = TREATMENTS.find(t => t.id==='xampu');
+  const bathDatesAll = allDates(xam);
+  const nextBath = bathDatesAll.find(d => d >= today0);
+  if(nextBath && endDate(xam) >= today0){
+    const days = Math.round((nextBath - today0)/86400000);
+    document.getElementById('nextBathInfo').innerHTML = bathDatesAll.find(d => sameDay(d, today0)) ? '' :
+      `<div class="card" style="font-size:.85rem;color:var(--muted)">🛁 Sem banho hoje — próximo em ${days===1?'amanhã':days+' dias'} (${fmtDate(nextBath)})</div>`;
   }
-
   // ---- doses de hoje (manhã / noite) ----
   const slots = {morning:[], evening:[]};
   for(const t of TREATMENTS){
-    if(t.type === 'bath') continue;
     for(const d of allDates(t)){
       if(!sameDay(d, today0)) continue;
+      if(t.type === 'bath'){ slots.morning.push({t, d}); continue; }
       const slotKey = d.getHours() <= 12 ? 'morning' : 'evening';
       slots[slotKey].push({t, d});
     }
@@ -785,8 +739,23 @@ function render(){
   function doseRowToday(item){
     const key = doseKey(item.t, item.d);
     const isDone = !!done[key];
-    const isLate = !isDone && item.d < now;
+    const isLate = !isDone && item.d < now && item.t.type !== 'bath';
     const lastDay = sameDay(endDate(item.t), today0);
+    if(item.t.type === 'bath'){
+      const nBath = allDates(item.t).findIndex(d => sameDay(d, today0)) + 1;
+      const nTotal = allDates(item.t).length;
+      const desc = `Banho ${nBath} de ${nTotal} · deixar agir 10 minutos no corpo`;
+      return `
+      <div class="dose ${isDone?'done':''}" data-key="${key}">
+        <div class="emoji">${item.t.icon}</div>
+        <div class="info">
+          <div class="name">${item.t.name}</div>
+          <div class="desc">${desc}</div>
+        </div>
+        <div class="time" style="${isDone?'background:var(--green)':''}">no dia</div>
+        <div class="check">✓</div>
+      </div>`;
+    }
     return `
       <div class="dose ${isDone?'done':''} ${isLate?'late':''}" data-key="${key}">
         <div class="emoji">${item.t.icon}</div>

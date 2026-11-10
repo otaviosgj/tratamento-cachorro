@@ -17,8 +17,7 @@ Dados de início: Otosyn 28/10 às 21h · Lenço 30/10 às 21h · SAME 31/10 às
 ## ✨ Funcionalidades
 
 - **Próximo cuidado** — cartão com o horário da próxima dose e contagem regressiva
-- **Hoje** — checklist da manhã (09h) e da noite (21h), com botão ✔ para marcar cada dose
-- **Timer de 10 minutos** para o tempo de ação do xampu no corpo
+- **Hoje** — checklist da manhã (09h) e da noite (21h), com botão ✔ para marcar cada dose (o banho entra como item marcável, igual às doses)
 - **Calendário do tratamento** — dias verdes (completos), amarelos (pela metade) e vermelhos (não feitos);
   toque em um dia para ver e marcar as doses individualmente
 - **Dias passados marcados automaticamente** — o acompanhamento começa a partir do dia atual
