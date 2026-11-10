@@ -247,6 +247,7 @@ const RAW_URL = 'https://raw.githubusercontent.com/' + REPO + '/main/' + DATA_FI
 const API_URL = 'https://api.github.com/repos/' + REPO + '/contents/' + DATA_FILE;
 const STORE_KEY = 'tratamento-cachorro-v1';   // cache local (fallback offline)
 const TOKEN_KEY = 'tc-gh-token';
+const UNSYNC_KEY = 'tc-unsynced';             // marcações aguardando envio (sobrevive a recarregar)
 
 let done = {};
 try { done = JSON.parse(localStorage.getItem(STORE_KEY) || '{}'); } catch(e){ done = {}; }
@@ -260,6 +261,16 @@ let pendingDirty = false;   // há marcações locais ainda não enviadas
 let pushBusy = false;
 let pushTimer = null;
 let remoteLoaded = false;   // conseguimos carregar data.json alguma vez
+let cachedSha = null;       // sha do data.json (para envio rápido ao esconder a página)
+let unsync = [];            // lista de {k, v} — marcações pendentes
+try { unsync = JSON.parse(localStorage.getItem(UNSYNC_KEY) || '[]') || []; } catch(e){ unsync = []; }
+function saveUnsync(){
+  try { localStorage.setItem(UNSYNC_KEY, JSON.stringify(unsync)); } catch(e){}
+}
+function recordUnsync(key, value){
+  if(!unsync.some(x => x.k === key)) unsync.push({ k: key, v: !!value });
+  saveUnsync();
+}
 
 function isOwner(){ return !!ownerToken; }
 function authHeaders(){
@@ -399,8 +410,63 @@ async function fetchSha(){
   const res = await fetch(API_URL, { headers: authHeaders() });
   if(!res.ok) throw new Error('sha');
   const j = await res.json();
-  return j.sha || null;
+  cachedSha = j.sha || null;
+  return cachedSha;
 }
+// reaplica marcações que ficaram pendentes do último acesso (guarda do recarregar rápido)
+function applyUnsync(){
+  if(!isOwner() || !unsync.length) return false;
+  let changed = false;
+  for(const item of unsync){
+    const info = findDoseByKey(item.k);
+    if(!info) continue;
+    if(item.v){
+      if(!done[info.key]){ done[info.key] = true; changed = true; }  // intenção da tutora vale mesmo se o dia passou
+    } else {
+      if(!canEditDose(info.d)) continue; // não é possível desfazer dia passado
+      if(done[info.key]){ delete done[info.key]; changed = true; }
+    }
+  }
+  if(changed){
+    pendingDirty = true;
+    persistCache();
+    schedulePush();
+  } else {
+    unsync = [];
+    saveUnsync();
+  }
+  return changed;
+}
+// envio rápido quando a página é escondida/fechada (não espera o debounce)
+async function flushPush(){
+  if(!isOwner() || !pendingDirty || pushBusy) return;
+  const payload = {
+    message: '🐾 sincronizando dispositivos',
+    content: b64(JSON.stringify({ v:1, updated: new Date().toISOString(), done: done }))
+  };
+  if(cachedSha) payload.sha = cachedSha;
+  try{
+    const res = await fetch(API_URL, {
+      method:'PUT',
+      headers: Object.assign({}, authHeaders(), {'Content-Type':'application/json'}),
+      body: JSON.stringify(payload),
+      keepalive: true
+    });
+    if(res && res.ok){
+      pendingDirty = false;
+      lastSync = new Date();
+      unsync = [];
+      saveUnsync();
+      try{ const j = await res.json(); if(j.content && j.content.sha) cachedSha = j.content.sha; }catch(e){}
+    } else if(res && (res.status === 409 || res.status === 422)){
+      cachedSha = null; // sha desatualizado — o reenvio pega um novo
+    }
+  } catch(e){ /* fica pendente: o unsync + reenvio automático recuperam */ }
+}
+document.addEventListener('visibilitychange', () => {
+  if(document.visibilityState === 'hidden') flushPush();
+});
+window.addEventListener('pagehide', flushPush);
 async function doPush(){
   if(!isOwner() || !pendingDirty || pushBusy) return;
   pushBusy = true;
@@ -423,7 +489,10 @@ async function doPush(){
         pendingDirty = false;
         lastSync = new Date();
         pushBusy = false;
+        unsync = [];
+        saveUnsync();
         persistCache();
+        try{ const j = await res.json(); if(j.content && j.content.sha) cachedSha = j.content.sha; }catch(e){}
         updateSyncBar();
         return;
       }
@@ -444,7 +513,7 @@ async function doPush(){
 }
 function schedulePush(){
   clearTimeout(pushTimer);
-  pushTimer = setTimeout(doPush, 1500);
+  pushTimer = setTimeout(doPush, 800);
 }
 
 // ============ BARRA DE STATUS ============
@@ -506,6 +575,7 @@ document.getElementById('tokenSave').addEventListener('click', async () => {
       try{ localStorage.setItem(TOKEN_KEY, val); }catch(e){}
       closeTokenModal();
       premarkPastDays();
+      applyUnsync();
       updateSyncBar();
       render();
       checkNotifications();
@@ -834,6 +904,7 @@ document.addEventListener('click', ev => {
     return;
   }
   if(done[info.key]) delete done[info.key]; else done[info.key] = true;
+  recordUnsync(info.key, !!done[info.key]);
   pendingDirty = true;
   persistCache();
   schedulePush();
@@ -854,6 +925,8 @@ document.getElementById('resetBtn').addEventListener('click', () => {
   if(confirm('Zerar todas as marcações? Os dias anteriores a hoje e as alterações serão enviados ao GitHub automaticamente.')){
     done = {};
     premarkInto(done);
+    unsync = [];
+    saveUnsync();
     pendingDirty = true;
     persistCache();
     schedulePush();
@@ -866,6 +939,7 @@ document.getElementById('resetBtn').addEventListener('click', () => {
   render();                 // pinta já com o cache local (evita tela vazia)
   await loadRemote();       // busca a versão mais recente do GitHub
   if(isOwner()){
+    applyUnsync();          // recupera marcações que o recarregar matou antes do envio
     premarkPastDays();      // dias anteriores a hoje voltam marcados (só tutora)
     if(pendingDirty) schedulePush();
   }
