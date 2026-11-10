@@ -25,7 +25,21 @@ Dados de início: Otosyn 28/10 às 21h · Lenço 30/10 às 21h · SAME 31/10 às
 - **Bloqueio de dias passados** — após o dia terminar, os dados ficam somente para visualização
 - **🔔 Notificações** — aviso no horário de cada dose (requer permitir notificações, com o app aberto)
 - **Barras de progresso** por tratamento, com total de doses e data final
-- Dados salvos no navegador (localStorage) — nada é enviado para servidores
+- **☁️ Dados compartilhados** — salvos no próprio GitHub (`data.json`) e sincronizados automaticamente:
+  todos veem o mesmo andamento, mas **só a tutora altera**
+- Dados salvos no navegador (localStorage) como fallback offline — nada de banco de dados externo
+
+## 🔒 Modo tutora (edição) × Modo visitação
+
+Por padrão, o site abre em **modo visitação**: leitura pública em tempo real das marcações.
+
+Para editar, a tutora precisa de um **token do GitHub (fine-grained)** com permissão de escrita no repositório:
+
+1. GitHub → **Settings** → **Developer settings** → **Personal access tokens** → **Fine-grained tokens** → *Generate new token*
+2. Em **Repository access**, selecione apenas `tratamento-cachorro`
+3. Em **Permissions → Repository permissions → Contents**, marque **Read and write**
+4. Copie o token e toque em **“🔐 Entrar”** no topo do site
+5. O token fica salvo **apenas no navegador da tutora** — nunca no código público
 
 ## 📱 Como usar
 

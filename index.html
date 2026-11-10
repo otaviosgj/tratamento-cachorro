@@ -28,6 +28,16 @@
   .next-card .what{font-size:.95rem; opacity:.95;}
   .countdown{font-variant-numeric:tabular-nums; font-size:1rem; margin-top:6px; font-weight:600;}
 
+  /* barra de modo/sincronização */
+  .syncbar{display:flex; gap:10px; align-items:center; background:var(--card); border-radius:12px;
+    box-shadow:var(--shadow); padding:10px 12px; font-size:.78rem; color:var(--muted);}
+  .syncbar .grow{flex:1; min-width:0;}
+  .syncbar .state{font-weight:700;}
+  .syncbar button{border:1px solid var(--line); background:#faf8f3; color:var(--ink); padding:8px 12px;
+    border-radius:10px; font-weight:700; font-size:.75rem; cursor:pointer; flex:none;}
+  .syncbar .mini{border:none; background:none; color:var(--muted); text-decoration:underline; cursor:pointer; font-size:.72rem; padding:4px;}
+  .syncbar.err{background:var(--red-soft);}
+
   .dose{display:flex; align-items:center; gap:12px; padding:12px 8px; border-bottom:1px solid var(--line); cursor:pointer;}
   .dose:last-child{border-bottom:none;}
   .dose .emoji{font-size:1.6rem; width:36px; text-align:center; flex:none;}
@@ -82,7 +92,7 @@
   .dot.f{background:#a9ddc0;} .dot.p{background:#f0d49c;} .dot.m{background:#f3bcbc;} .dot.b{background:#efe9dc;}
   .cal-hint{text-align:center; font-size:.72rem; color:var(--muted); margin-top:8px;}
 
-  /* modal do dia */
+  /* modais */
   .modal-overlay{position:fixed; inset:0; background:rgba(60,45,25,.45); display:none;
     z-index:50; align-items:flex-end; justify-content:center;}
   .modal-overlay.open{display:flex;}
@@ -95,6 +105,16 @@
     font-size:1rem; cursor:pointer; flex:none; font-weight:700; color:var(--ink);}
   .modal-banner{background:#f4efe6; color:var(--muted); font-size:.75rem; padding:8px 12px;
     border-radius:10px; margin-bottom:10px; display:flex; gap:6px; align-items:center;}
+  .modal-banner.owner{background:var(--green-soft); color:#1c7c46;}
+  .modal-banner.guest{background:var(--accent-soft); color:#a4651a;}
+  .token-input{width:100%; padding:12px; border-radius:10px; border:1.5px solid var(--line);
+    font-size:.85rem; margin:10px 0; background:#fff; color:var(--ink);}
+  .modal .p{font-size:.82rem; color:var(--muted); line-height:1.5; margin:6px 0;}
+  .modal .p b{color:var(--ink);}
+  .modal-actions{display:flex; gap:10px; margin-top:12px;}
+  .btn-primary{flex:1; border:none; background:var(--accent); color:#fff; padding:12px; border-radius:12px;
+    font-weight:800; font-size:.9rem; cursor:pointer;}
+  .btn-sec{border:none; background:#ece7dd; color:var(--ink); padding:12px 18px; border-radius:12px; font-weight:700; cursor:pointer;}
 
   .progress-row{margin-bottom:14px;}
   .progress-row:last-child{margin-bottom:0;}
@@ -119,7 +139,8 @@
     <div class="carinho">cassorro bunito de mãe 💛</div>
   </header>
 
-  <div id="notifSlot" style="margin-top:14px"></div>
+  <div id="syncBar" style="margin-top:14px"></div>
+  <div id="notifSlot"></div>
   <section id="nextSection"></section>
   <section>
     <h2>Hoje</h2>
@@ -153,7 +174,7 @@
   </section>
 
   <footer>
-    Dados salvos neste navegador 💾<br>
+    Dados públicos e sincronizados pelo GitHub ☁️ · somente a tutora pode alterar 🔒<br>
     <button id="resetBtn">zerar todas as marcações</button>
   </footer>
 </div>
@@ -170,6 +191,31 @@
     </div>
     <div id="modalBanner"></div>
     <div class="card" id="modalList"></div>
+  </div>
+</div>
+
+<!-- modal de login da tutora -->
+<div class="modal-overlay" id="tokenModal">
+  <div class="modal">
+    <div class="modal-head">
+      <div>
+        <h3>🔐 Entrar como tutora</h3>
+        <div class="sub">Desbloqueia a edição deste acompanhamento</div>
+      </div>
+      <button class="modal-close" id="tokenClose">✕</button>
+    </div>
+    <div class="modal-banner">🔒 <span>Seu token fica salvo apenas neste navegador — ele não vai para o código público.</span></div>
+    <p class="p">Para alterar os dados, use um <b>token do GitHub com permissão de escrita</b> neste repositório:</p>
+    <p class="p">1. Acesse <b>github.com → Settings → Developer settings → Fine-grained tokens → Generate new token</b><br>
+      2. Em <b>Repository access</b>, selecione apenas <b>tratamento-cachorro</b><br>
+      3. Em <b>Permissions → Repository permissions → Contents</b>, marque <b>Read and write</b><br>
+      4. Gere e cole o token abaixo:</p>
+    <input class="token-input" id="tokenInput" type="password" placeholder="github_pat_…" autocomplete="off">
+    <div id="tokenMsg" class="p"></div>
+    <div class="modal-actions">
+      <button class="btn-sec" id="tokenCancel">Cancelar</button>
+      <button class="btn-primary" id="tokenSave">Entrar</button>
+    </div>
   </div>
 </div>
 
@@ -198,28 +244,36 @@ const TREATMENTS = [
   }
 ];
 
-const STORE_KEY = 'tratamento-cachorro-v1';
-const PREMARK_KEY = 'tratamento-premarked-v2';
-const NOTIF_SENT_KEY = 'tratamento-notif-sent';
+// ============ SINCRONIZAÇÃO (GitHub) ============
+const REPO = 'otaviosgj/tratamento-cachorro';
+const DATA_FILE = 'data.json';
+const RAW_URL = 'https://raw.githubusercontent.com/' + REPO + '/main/' + DATA_FILE;
+const API_URL = 'https://api.github.com/repos/' + REPO + '/contents/' + DATA_FILE;
+const STORE_KEY = 'tratamento-cachorro-v1';   // cache local (fallback offline)
+const TOKEN_KEY = 'tc-gh-token';
+
 let done = {};
 try { done = JSON.parse(localStorage.getItem(STORE_KEY) || '{}'); } catch(e){ done = {}; }
-function save(){ localStorage.setItem(STORE_KEY, JSON.stringify(done)); }
-
-// ============ MARCAÇÃO AUTOMÁTICA DOS DIAS ANTERIORES A HOJE ============
-function startOfDay(d){ return new Date(d.getFullYear(), d.getMonth(), d.getDate()); }
-function premarkPastDays(){
-  if(localStorage.getItem(PREMARK_KEY)) return;
-  const today0 = startOfDay(new Date());
-  for(const t of TREATMENTS){
-    for(const d of allDates(t)){
-      if(d < today0) done[doseKey(t,d)] = true;   // tudo antes de hoje = já feito
-    }
-  }
-  localStorage.setItem(PREMARK_KEY, '1');
-  save();
+function persistCache(){
+  try { localStorage.setItem(STORE_KEY, JSON.stringify(done)); } catch(e){}
 }
 
-// ============ HELPERS ============
+let ownerToken = localStorage.getItem(TOKEN_KEY) || '';
+let lastSync = null;        // Date da última sincronização concluída
+let pendingDirty = false;   // há marcações locais ainda não enviadas
+let pushBusy = false;
+let pushTimer = null;
+let remoteLoaded = false;   // conseguimos carregar data.json alguma vez
+
+function isOwner(){ return !!ownerToken; }
+function authHeaders(){
+  return { 'Authorization': 'Bearer ' + ownerToken, 'Accept': 'application/vnd.github+json' };
+}
+function b64(str){ return btoa(unescape(encodeURIComponent(str))); }
+function todayStart(d){ return new Date(d.getFullYear(), d.getMonth(), d.getDate()); }
+function startOfDay(d){ return todayStart(d); }
+
+// ============ HELPERS DE DATAS ============
 function parseStart(t){
   if(t.type === 'bath'){
     const [y,m,d] = t.start.split('-').map(Number);
@@ -248,7 +302,6 @@ function canEditDose(d){
   return startOfDay(d) >= startOfDay(new Date());
 }
 
-// Gera todas as datas (doses / banhos) de um tratamento
 function allDates(t){
   const start = parseStart(t);
   const out = [];
@@ -281,14 +334,206 @@ function dosesOnDay(day){
   return out.sort((a,b)=>a.d-b.d);
 }
 
+// Marca automaticamente como feitas as doses anteriores a hoje (modo tutora)
+function premarkPastDays(){
+  const today0 = todayStart(new Date());
+  let changed = false;
+  for(const t of TREATMENTS){
+    for(const d of allDates(t)){
+      const k = doseKey(t,d);
+      if(d < today0 && !done[k]){ done[k] = true; changed = true; }
+    }
+  }
+  if(changed){
+    pendingDirty = true;
+    persistCache();
+    render();
+    schedulePush();
+  }
+  return changed;
+}
+
+// ============ CARREGAR / ENVIAR / MESCLAR ============
+async function loadRemote(){
+  try{
+    const res = await fetch(RAW_URL + '?_=' + Date.now(), { cache:'no-store' });
+    if(res.ok){
+      const data = await res.json();
+      if(data && data.v === 1 && data.done){
+        remoteLoaded = true;
+        if(!pendingDirty && !pushBusy){
+          done = Object.assign({}, data.done);
+          persistCache();
+          if(isOwner()){
+            premarkPastDays(); // já renderiza por dentro quando muda algo
+          }
+          render();
+        }
+        return true;
+      }
+    } else if(res.status === 404){
+      // arquivo ainda não publicado — usa o cache local com o preenchimento automático
+      remoteLoaded = false;
+      if(Object.keys(done).length === 0){
+        premarkInto(done);
+        persistCache();
+        render();
+      }
+    }
+  } catch(e){
+    // offline — mantém o cache local
+  }
+  return false;
+}
+function premarkInto(map){
+  const today0 = todayStart(new Date());
+  for(const t of TREATMENTS){
+    for(const d of allDates(t)){
+      const k = doseKey(t,d);
+      if(d < today0) map[k] = true;
+    }
+  }
+}
+function pollRemote(){
+  if(pushBusy || pendingDirty) return; // não sobrescreve alterações não enviadas
+  loadRemote();
+}
+
+async function fetchSha(){
+  const res = await fetch(API_URL, { headers: authHeaders() });
+  if(!res.ok) throw new Error('sha');
+  const j = await res.json();
+  return j.sha || null;
+}
+async function doPush(){
+  if(!isOwner() || !pendingDirty || pushBusy) return;
+  pushBusy = true;
+  updateSyncBar('⏳ Sincronizando com o GitHub…');
+  for(let tentativa = 1; tentativa <= 3; tentativa++){
+    try{
+      let sha = null;
+      try{ sha = await fetchSha(); }catch(e){}
+      const payload = {
+        message: '🐾 atualização do acompanhamento',
+        content: b64(JSON.stringify({ v:1, updated: new Date().toISOString(), done: done }))
+      };
+      if(sha) payload.sha = sha;
+      const res = await fetch(API_URL, {
+        method: 'PUT',
+        headers: Object.assign({}, authHeaders(), {'Content-Type':'application/json'}),
+        body: JSON.stringify(payload)
+      });
+      if(res.ok){
+        pendingDirty = false;
+        lastSync = new Date();
+        pushBusy = false;
+        persistCache();
+        updateSyncBar();
+        return;
+      }
+      if(res.status === 401 || res.status === 403){
+        updateSyncBar('⚠️ Token sem permissão de escrita — verifique Contents/Read-and-write no token');
+        pushBusy = false;
+        return;
+      }
+      // 409/422 → sha desatualizado, tenta de novo com sha fresco
+    } catch(e){
+      updateSyncBar('⚠️ Sem conexão — suas marcações estão salvas no aparelho e serão enviadas automaticamente');
+      pushBusy = false;
+      return;
+    }
+  }
+  updateSyncBar('⚠️ Não consegui salvar agora — tentarei novamente em instantes');
+  pushBusy = false;
+}
+function schedulePush(){
+  clearTimeout(pushTimer);
+  pushTimer = setTimeout(doPush, 1500);
+}
+
+// ============ BARRA DE STATUS ============
+function updateSyncBar(stateText){
+  const el = document.getElementById('syncBar');
+  if(!el) return;
+  if(isOwner()){
+    let state = stateText || '';
+    if(!stateText){
+      if(pendingDirty) state = '⏳ aguardando envio…';
+      else if(lastSync) state = '☁️ sincronizado às ' + fmtTime(lastSync);
+      else state = '☁️ conectada como tutora';
+    }
+    const err = stateText && stateText.indexOf('⚠️') === 0;
+    el.innerHTML = `
+      <div class="syncbar ${err?'err':''}">
+        <span>🔓</span>
+        <span class="grow"><b style="color:var(--ink)">Modo edição (tutora)</b> · <span class="state">${state}</span></span>
+        <button class="mini" id="signOutBtn">sair</button>
+      </div>`;
+    document.getElementById('signOutBtn').addEventListener('click', () => {
+      ownerToken = '';
+      localStorage.removeItem(TOKEN_KEY);
+      render();
+    });
+  } else {
+    el.innerHTML = `
+      <div class="syncbar">
+        <span>👀</span>
+        <span class="grow"><b style="color:var(--ink)">Modo visitação</b> — acompanhamento em tempo real; para marcar, entre como tutora.</span>
+        <button id="ownerBtn">🔐 Entrar</button>
+      </div>`;
+    document.getElementById('ownerBtn').addEventListener('click', openTokenModal);
+  }
+}
+
+// ============ MODAL DE TOKEN ============
+function openTokenModal(){
+  document.getElementById('tokenInput').value = '';
+  document.getElementById('tokenMsg').textContent = '';
+  document.getElementById('tokenModal').classList.add('open');
+  setTimeout(()=>document.getElementById('tokenInput').focus(), 100);
+}
+function closeTokenModal(){ document.getElementById('tokenModal').classList.remove('open'); }
+document.getElementById('tokenClose').addEventListener('click', closeTokenModal);
+document.getElementById('tokenCancel').addEventListener('click', closeTokenModal);
+document.getElementById('tokenModal').addEventListener('click', ev => {
+  if(ev.target.id === 'tokenModal') closeTokenModal();
+});
+document.getElementById('tokenSave').addEventListener('click', async () => {
+  const val = document.getElementById('tokenInput').value.trim();
+  const msg = document.getElementById('tokenMsg');
+  if(!val){ msg.textContent = '⚠️ Cole o token primeiro.'; return; }
+  msg.textContent = '⏳ verificando…';
+  try{
+    const res = await fetch(API_URL, { headers: { 'Authorization': 'Bearer ' + val, 'Accept':'application/vnd.github+json' } });
+    if(res.ok){
+      ownerToken = val;
+      try{ localStorage.setItem(TOKEN_KEY, val); }catch(e){}
+      closeTokenModal();
+      premarkPastDays();
+      updateSyncBar();
+      render();
+      checkNotifications();
+    } else if(res.status === 401){
+      msg.textContent = '❌ Token inválido ou expirado.';
+    } else if(res.status === 403){
+      msg.textContent = '❌ O token não tem permissão de escrita (marque Contents → Read and write).';
+    } else if(res.status === 404){
+      msg.textContent = '❌ O token não dá acesso ao repositório tratamento-cachorro (marque o repositório em Repository access).';
+    } else {
+      msg.textContent = '❌ Não foi possível validar o token (' + res.status + ').';
+    }
+  } catch(e){
+    msg.textContent = '❌ Falha de conexão ao validar — tente novamente.';
+  }
+});
+
 // ============ NOTIFICAÇÕES DE HORÁRIO ============
 let sentNotif = {};
-try { sentNotif = JSON.parse(localStorage.getItem(NOTIF_SENT_KEY) || '{}'); } catch(e){ sentNotif = {}; }
+try { sentNotif = JSON.parse(localStorage.getItem('tratamento-notif-sent') || '{}'); } catch(e){ sentNotif = {}; }
 function notificationItems(now){
   const items = [];
   for(const t of TREATMENTS){
     if(t.type === 'bath'){
-      // lembrete de banho às 09:00 do dia do banho
       for(const d of allDates(t)){
         const at = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 9, 0, 0);
         if(at < now) continue;
@@ -310,10 +555,9 @@ function checkNotifications(){
   const now = Date.now();
   for(const item of notificationItems(new Date(now))){
     const dt = item.at.getTime();
-    // dispara quando chega no horário (janela de 1 min) e ainda não foi feito
     if(dt <= now && now - dt <= 60000 && !sentNotif[item.notifKey] && !done[item.markKey]){
       sentNotif[item.notifKey] = true;
-      try{ localStorage.setItem(NOTIF_SENT_KEY, JSON.stringify(sentNotif)); }catch(e){}
+      try{ localStorage.setItem('tratamento-notif-sent', JSON.stringify(sentNotif)); }catch(e){}
       const n = new Notification(item.title, {body: item.body, tag: item.notifKey});
       n.onclick = () => { window.focus(); n.close(); };
     }
@@ -361,7 +605,7 @@ function renderCalendar(){
   document.getElementById('calMonth').textContent =
     new Date(viewYear, viewMonth, 1).toLocaleDateString('pt-BR',{month:'long', year:'numeric'});
 
-  const today0 = startOfDay(now);
+  const today0 = todayStart(now);
   const first = new Date(viewYear, viewMonth, 1);
   const daysInMonth = new Date(viewYear, viewMonth+1, 0).getDate();
   const grid = document.getElementById('calGrid');
@@ -388,7 +632,6 @@ function renderCalendar(){
   }
   grid.innerHTML = html;
 }
-// tocar em um dia abre a lista dele (sem marcar nada automaticamente)
 document.getElementById('calGrid').addEventListener('click', ev => {
   const cell = ev.target.closest('.day:not(.empty)');
   if(!cell || !cell.dataset.day) return;
@@ -427,7 +670,7 @@ function doseRow(item){
 }
 function openDayModal(ts){
   const day = new Date(ts);
-  window.__openDayTs = ts; // lembra qual dia está aberto, para atualizar após marcar
+  window.__openDayTs = ts;
   const now = new Date();
   const sched = dosesOnDay(day);
   const isPast = startOfDay(day) < startOfDay(now);
@@ -437,9 +680,16 @@ function openDayModal(ts){
   const doneCount = sched.filter(x => done[doseKey(x.t, x.d)]).length;
   document.getElementById('modalSub').textContent =
     `${doneCount} de ${sched.length} feitos nesse dia${isToday ? ' (hoje)' : ''}`;
-  document.getElementById('modalBanner').innerHTML = isPast
-    ? '🔒 <span>Dia passado — apenas visualização, não é mais possível alterar.</span>'
-    : (isToday ? '👆 toque em cada dose para marcar ou desmarcar — nada é marcado automaticamente.' : '👆 toque para marcar as doses desse dia.');
+  const banner = document.getElementById('modalBanner');
+  banner.className = 'modal-banner ' + (isOwner() ? 'owner' : 'guest');
+  if(!isOwner()){
+    banner.innerHTML = '👀 <span>Modo visitação — somente a tutora pode marcar. ' +
+      'Para editar, toque em “🔐 Entrar” no topo.</span>';
+  } else if(isPast){
+    banner.innerHTML = '🔒 <span>Dia passado — apenas visualização, não é mais possível alterar.</span>';
+  } else {
+    banner.innerHTML = '👆 <span>Toque em cada dose para marcar ou desmarcar — nada é marcado automaticamente.</span>';
+  }
   document.getElementById('modalList').innerHTML = sched.map(doseRow).join('');
   document.getElementById('dayModal').classList.add('open');
 }
@@ -453,9 +703,11 @@ document.addEventListener('keydown', ev => { if(ev.key === 'Escape') closeDayMod
 // ============ RENDER PRINCIPAL ============
 function render(){
   const now = new Date();
-  const today0 = startOfDay(now);
+  const today0 = todayStart(now);
   document.getElementById('todayLabel').textContent =
     now.toLocaleDateString('pt-BR',{weekday:'long', day:'numeric', month:'long'});
+
+  updateSyncBar();
 
   // ---- lembretes ----
   const slot = document.getElementById('notifSlot');
@@ -591,10 +843,10 @@ function render(){
   pEl.innerHTML = pHtml;
 }
 
-// ---- marcar/desmarcar uma dose individual (checklist de hoje ou modal) ----
+// ============ AÇÕES DE MARCAÇÃO ============
 document.addEventListener('click', ev => {
-  const btn = ev.target.closest('#notifBtn');
-  if(btn){
+  const notifBtn = ev.target.closest('#notifBtn');
+  if(notifBtn){
     if('Notification' in window){
       Notification.requestPermission().then(() => { checkNotifications(); render(); });
     }
@@ -604,14 +856,19 @@ document.addEventListener('click', ev => {
   if(!row) return;
   const info = findDoseByKey(row.dataset.key);
   if(!info) return;
+  if(!isOwner()){
+    alert('👀 Modo visitação — apenas a tutora pode alterar os dados.\nPara editar, toque em “🔐 Entrar” no topo da página.');
+    return;
+  }
   if(!canEditDose(info.d)){
     alert('🔒 Esse dia já passou — não é mais possível alterar, apenas visualizar.');
     return;
   }
   if(done[info.key]) delete done[info.key]; else done[info.key] = true;
-  save();
+  pendingDirty = true;
+  persistCache();
+  schedulePush();
   render();
-  // mantém o modal aberto e atualizado, se estiver visível
   if(document.getElementById('dayModal').classList.contains('open') && window.__openDayTs){
     openDayModal(window.__openDayTs);
   }
@@ -621,18 +878,33 @@ document.getElementById('prevMonth').addEventListener('click', () => changeMonth
 document.getElementById('nextMonth').addEventListener('click', () => changeMonth(1));
 
 document.getElementById('resetBtn').addEventListener('click', () => {
-  if(confirm('Zerar todas as marcações? Os dias anteriores a hoje voltam a ficar marcados automaticamente, pois o tratamento já começou antes.')){
+  if(!isOwner()){
+    alert('🔒 Apenas a tutora pode zerar as marcações.');
+    return;
+  }
+  if(confirm('Zerar todas as marcações? Os dias anteriores a hoje e as alterações serão enviados ao GitHub automaticamente.')){
     done = {};
-    localStorage.removeItem(PREMARK_KEY);
-    premarkPastDays();
+    premarkInto(done);
+    pendingDirty = true;
+    persistCache();
+    schedulePush();
     render();
   }
 });
 
-// ---- boot ----
-premarkPastDays();
-render();
-checkNotifications();
+// ============ BOOT ============
+(async function init(){
+  render();                 // pinta já com o cache local (evita tela vazia)
+  await loadRemote();       // busca a versão mais recente do GitHub
+  if(isOwner()){
+    premarkPastDays();      // dias anteriores a hoje voltam marcados (só tutora)
+    if(pendingDirty) schedulePush();
+  }
+  updateSyncBar();
+  checkNotifications();
+  setInterval(pollRemote, 45000);          // visitantes veem atualizações rodando
+  setInterval(() => { if(pendingDirty) doPush(); }, 30000);  // reenvio offline
+})();
 </script>
 </body>
 </html>
